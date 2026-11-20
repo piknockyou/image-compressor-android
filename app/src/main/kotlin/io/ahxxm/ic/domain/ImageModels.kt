@@ -13,7 +13,9 @@ data class ImageItem(
     val uri: Uri,
     val name: String,
     val sizeBytes: Long,
-    val mimeType: String
+    val mimeType: String,
+    // False for shared images, which are read-only: compressed output is saved as a new file
+    val replaceInPlace: Boolean = true
 ) {
     val isJpeg: Boolean get() = mimeType == "image/jpeg"
     val isPng: Boolean get() = mimeType == "image/png"

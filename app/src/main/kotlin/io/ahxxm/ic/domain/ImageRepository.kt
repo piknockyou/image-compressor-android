@@ -51,7 +51,7 @@ class ImageRepository(private val contentResolver: ContentResolver) {
                 imageCount = data.imageCount,
                 totalSizeBytes = data.totalSize
             )
-        }.sortedByDescending { it.totalSizeBytes }
+        }.sortedBy { it.name.lowercase() }
     }
 
     suspend fun getImagesInFolder(bucketId: Long): List<ImageItem> = withContext(Dispatchers.IO) {

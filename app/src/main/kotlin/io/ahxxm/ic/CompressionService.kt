@@ -4,9 +4,11 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.provider.MediaStore
 import androidx.core.app.NotificationCompat
 import io.ahxxm.ic.domain.CompressionOptions
 import io.ahxxm.ic.domain.ImageCompressionPreview
@@ -114,12 +116,38 @@ class CompressionService : Service() {
     private fun overwriteImage(preview: ImageCompressionPreview): Boolean {
         val tempFile = preview.tempFile ?: return false
         return try {
-            contentResolver.openOutputStream(preview.image.uri, "wt")?.use { out ->
-                tempFile.inputStream().use { it.copyTo(out) }
+            if (preview.image.replaceInPlace) {
+                contentResolver.openOutputStream(preview.image.uri, "wt")?.use { out ->
+                    tempFile.inputStream().use { it.copyTo(out) }
+                }
+            } else {
+                saveAsNewFile(preview.image, tempFile)
             }
             true
         } catch (e: Exception) {
             false
+        }
+    }
+
+    // Shared images are read-only, so the compressed copy goes to Pictures/ImageCompressor
+    private fun saveAsNewFile(image: ImageItem, tempFile: java.io.File) {
+        val pending = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "compressed_${image.name}")
+            put(MediaStore.Images.Media.MIME_TYPE, image.mimeType)
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/ImageCompressor")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val target = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, pending)
+            ?: throw IllegalStateException("MediaStore insert failed")
+        try {
+            val out = contentResolver.openOutputStream(target, "wt")
+                ?: throw IllegalStateException("Cannot open output for $target")
+            out.use { tempFile.inputStream().use { input -> input.copyTo(it) } }
+            val published = ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }
+            contentResolver.update(target, published, null, null)
+        } catch (e: Exception) {
+            contentResolver.delete(target, null, null)
+            throw e
         }
     }
 

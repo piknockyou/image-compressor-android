@@ -38,19 +38,20 @@ import io.ahxxm.ic.domain.CompressionOptions
 import io.ahxxm.ic.domain.CompressionResult
 import io.ahxxm.ic.domain.Encoder
 import io.ahxxm.ic.domain.ImageItem
+import io.ahxxm.ic.domain.ImageSource
 import io.ahxxm.ic.domain.formatBytes
 
 private val GroupSpacing = 8.dp
 
 @Composable
 fun OptionsScreen(
-    bucketId: Long,
+    source: ImageSource,
     onConfirm: (CompressionOptions) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    folderName: String = "",
     viewModel: OptionsViewModel = viewModel(),
 ) {
+    val folderName = source.name
     val sampleState by viewModel.sampleState.collectAsState()
     val qualityLevel by viewModel.qualityLevel.collectAsState()
     val preserveExif by viewModel.preserveExif.collectAsState()
@@ -61,8 +62,8 @@ fun OptionsScreen(
         viewModel.presetEncoder(folderName)
     }
 
-    LaunchedEffect(bucketId) {
-        viewModel.loadSampleImage(bucketId)
+    LaunchedEffect(source) {
+        viewModel.loadSampleImage(source)
     }
 
     LaunchedEffect(Unit) {

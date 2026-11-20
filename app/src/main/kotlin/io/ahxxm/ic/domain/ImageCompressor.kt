@@ -100,8 +100,11 @@ class ImageCompressor(private val context: Context) {
 
     // Redaction: https://developer.android.com/training/data-storage/shared/media
     // setRequireOriginal: https://developer.android.com/reference/android/provider/MediaStore#setRequireOriginal(android.net.Uri)
-    private fun openOriginalStream(uri: Uri): InputStream? =
-        context.contentResolver.openInputStream(MediaStore.setRequireOriginal(uri))
+    // setRequireOriginal only applies to MediaStore URIs; SAF and shared URIs are opened as-is
+    private fun openOriginalStream(uri: Uri): InputStream? {
+        val target = if (uri.authority == MediaStore.AUTHORITY) MediaStore.setRequireOriginal(uri) else uri
+        return context.contentResolver.openInputStream(target)
+    }
 
     private fun copyExifData(image: ImageItem, destFile: File, halvedDims: Pair<Int, Int>? = null) {
         try {

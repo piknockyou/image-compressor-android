@@ -8,7 +8,7 @@ import io.ahxxm.ic.domain.CompressionResult
 import io.ahxxm.ic.domain.Encoder
 import io.ahxxm.ic.domain.ImageCompressor
 import io.ahxxm.ic.domain.ImageItem
-import io.ahxxm.ic.domain.ImageRepository
+import io.ahxxm.ic.domain.ImageSource
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,7 +40,6 @@ sealed class SampleState {
 @OptIn(FlowPreview::class)
 class OptionsViewModel(application: Application) : AndroidViewModel(application) {
     private val compressor = ImageCompressor(application)
-    private val repository = ImageRepository(application.contentResolver)
 
     private var currentTempFile: File? = null
     private var sampleImage: ImageItem? = null
@@ -70,9 +69,9 @@ class OptionsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun loadSampleImage(bucketId: Long) {
+    fun loadSampleImage(source: ImageSource) {
         viewModelScope.launch {
-            val images = repository.getImagesInFolder(bucketId)
+            val images = source.loadImages(getApplication())
                 .filter { it.isProcessable }
 
             val current = sampleImage

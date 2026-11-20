@@ -2,6 +2,9 @@ package io.ahxxm.ic.ui
 
 import android.Manifest
 import android.content.ContentResolver
+import android.content.Intent
+import androidx.documentfile.provider.DocumentFile
+import io.ahxxm.ic.domain.ImageSource
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -69,7 +72,7 @@ private class ContentResolverFolderRepository(
 
 @Composable
 fun FolderBrowserScreen(
-    onFolderSelected: (bucketId: Long, folderName: String) -> Unit,
+    onSourceSelected: (ImageSource) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -82,6 +85,24 @@ fun FolderBrowserScreen(
         FolderBrowserViewModel(ContentResolverFolderRepository(context.contentResolver))
     }
     val state by viewModel.state.collectAsState()
+
+    // System folder picker: browse like a file manager; no media permission needed
+    val folderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        if (treeUri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    treeUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // Provider gave read-only access; compression still works, saving may fail
+            }
+            val name = DocumentFile.fromTreeUri(context, treeUri)?.name ?: "Folder"
+            onSourceSelected(ImageSource.Tree(treeUri, name))
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -111,7 +132,8 @@ fun FolderBrowserScreen(
         when {
             !permissionGranted -> {
                 PermissionRequest(
-                    onRequestPermission = { permissionLauncher.launch(requiredPermissions().toTypedArray()) }
+                    onRequestPermission = { permissionLauncher.launch(requiredPermissions().toTypedArray()) },
+                    onBrowse = { folderPicker.launch(null) }
                 )
             }
             else -> {
@@ -128,6 +150,9 @@ fun FolderBrowserScreen(
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.weight(1f)
                         )
+                        TextButton(onClick = { folderPicker.launch(null) }) {
+                            Text("Browse")
+                        }
                         TextButton(onClick = { scope.launch { viewModel.loadFolders() } }) {
                             Text("Refresh")
                         }
@@ -135,7 +160,9 @@ fun FolderBrowserScreen(
                     HorizontalDivider()
                     FolderList(
                         folders = state.folders,
-                        onFolderClick = { folder -> onFolderSelected(folder.bucketId, folder.name) }
+                        onFolderClick = { folder ->
+                            onSourceSelected(ImageSource.Bucket(folder.bucketId, folder.name))
+                        }
                     )
                 }
             }
@@ -144,7 +171,7 @@ fun FolderBrowserScreen(
 }
 
 @Composable
-private fun PermissionRequest(onRequestPermission: () -> Unit) {
+private fun PermissionRequest(onRequestPermission: () -> Unit, onBrowse: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -163,6 +190,9 @@ private fun PermissionRequest(onRequestPermission: () -> Unit) {
         )
         Button(onClick = onRequestPermission) {
             Text("Grant Permissions")
+        }
+        TextButton(onClick = onBrowse, modifier = Modifier.padding(top = 8.dp)) {
+            Text("Browse folders instead")
         }
     }
 }

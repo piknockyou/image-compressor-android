@@ -217,7 +217,7 @@ class LargeFontLayoutTest(
     @Test
     fun optionsScreen() {
         compose {
-            OptionsScreen(bucketId = 1L, onConfirm = {}, onBack = {})
+            OptionsScreen(source = io.ahxxm.ic.domain.ImageSource.Bucket(1L, "Test"), onConfirm = {}, onBack = {})
         }
         assertViewportIsHonored()
         assertOptionsScreenHolds()
@@ -226,7 +226,7 @@ class LargeFontLayoutTest(
     @Test
     fun folderBrowser() {
         compose {
-            FolderBrowserScreen(onFolderSelected = { _, _ -> })
+            FolderBrowserScreen(onSourceSelected = {})
         }
         assertViewportIsHonored()
         assertFolderBrowserHolds()

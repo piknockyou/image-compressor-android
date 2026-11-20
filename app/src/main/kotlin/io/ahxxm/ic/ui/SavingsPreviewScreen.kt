@@ -27,11 +27,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ahxxm.ic.CompressionService
 import io.ahxxm.ic.domain.CompressionOptions
 import io.ahxxm.ic.domain.ImageCompressionPreview
-import io.ahxxm.ic.domain.ImageRepository
+import io.ahxxm.ic.domain.ImageSource
 
 @Composable
 fun SavingsPreviewScreen(
-    bucketId: Long,
+    source: ImageSource,
     options: CompressionOptions,
     onConfirm: (List<ImageCompressionPreview>) -> Unit,
     onBack: () -> Unit,
@@ -44,10 +44,8 @@ fun SavingsPreviewScreen(
     val results by CompressionService.compressionResults.collectAsStateWithLifecycle()
 
     // Start compression service
-    LaunchedEffect(bucketId, options) {
-        val repository = ImageRepository(context.contentResolver)
-        val allImages = repository.getImagesInFolder(bucketId)
-        val images = allImages.filter { it.isProcessable }
+    LaunchedEffect(source, options) {
+        val images = source.loadImages(context).filter { it.isProcessable }
 
         if (images.isEmpty()) {
             errorMessage = "No processable images in this folder."

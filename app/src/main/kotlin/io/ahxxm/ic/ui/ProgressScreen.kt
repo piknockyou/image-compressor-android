@@ -97,10 +97,18 @@ fun ProgressScreen(
                 }
             }
             ProgressState.RequestingWriteAccess -> {
-                val uris = selectedPreviews.map { it.image.uri }
-                val writeRequest = MediaStore.createWriteRequest(context.contentResolver, uris)
-                state = ProgressState.WaitingForApproval
-                writeRequestLauncher.launch(IntentSenderRequest.Builder(writeRequest).build())
+                // Only gallery (MediaStore) images need user approval; folder and shared images save directly
+                val mediaUris = selectedPreviews
+                    .map { it.image.uri }
+                    .filter { it.authority == MediaStore.AUTHORITY }
+                if (mediaUris.isEmpty()) {
+                    state = ProgressState.Compressing
+                    CompressionService.startSave(context, selectedPreviews)
+                } else {
+                    val writeRequest = MediaStore.createWriteRequest(context.contentResolver, mediaUris)
+                    state = ProgressState.WaitingForApproval
+                    writeRequestLauncher.launch(IntentSenderRequest.Builder(writeRequest).build())
+                }
             }
             ProgressState.Complete -> {
                 if (saveResult != null) {

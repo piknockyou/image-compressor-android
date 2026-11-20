@@ -131,6 +131,7 @@ dependencies {
     implementation(libs.serialization.json)
     implementation(libs.core.ktx)
     implementation(libs.exifinterface)
+    implementation(libs.documentfile)
     implementation(libs.coil.compose)
 
     // Native image encoders
