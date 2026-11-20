@@ -1,10 +1,13 @@
 package io.ahxxm.ic
 
+import android.content.ContentResolver
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
+import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -55,22 +58,37 @@ class MainActivity : ComponentActivity() {
         val uris = when (intent.action) {
             Intent.ACTION_SEND -> listOfNotNull(intent.streamExtra())
             Intent.ACTION_SEND_MULTIPLE -> intent.streamListExtra()
+            Intent.ACTION_VIEW -> listOfNotNull(intent.data)
             else -> return null
         }
         return uris.mapNotNull { it.toSharedImage() }.takeIf { it.isNotEmpty() }
     }
 
     private fun Uri.toSharedImage(): ImageItem? {
-        val mime = contentResolver.getType(this) ?: return null
-        var name = "image"
+        var name = lastPathSegment?.substringAfterLast('/') ?: "image"
         var size = 0L
-        contentResolver.query(this, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
-            ?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    name = cursor.getString(0) ?: name
-                    if (!cursor.isNull(1)) size = cursor.getLong(1)
-                }
+        // content:// from providers; file:// has no query support, so read the file directly
+        if (scheme == ContentResolver.SCHEME_FILE) {
+            path?.let { File(it) }?.takeIf { it.isFile }?.let { file ->
+                name = file.name
+                size = file.length()
             }
+        } else {
+            try {
+                contentResolver.query(this, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
+                    ?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            name = cursor.getString(0) ?: name
+                            if (!cursor.isNull(1)) size = cursor.getLong(1)
+                        }
+                    }
+            } catch (_: Exception) {
+                // Keep the name from the URI path
+            }
+        }
+        val mime = contentResolver.getType(this)
+            ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
+            ?: return null
         return ImageItem(
             uri = this,
             name = name,

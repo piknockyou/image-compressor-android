@@ -1,8 +1,10 @@
 package io.ahxxm.ic.ui
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.ContentResolver
 import android.content.Intent
+import android.widget.Toast
 import androidx.documentfile.provider.DocumentFile
 import io.ahxxm.ic.domain.ImageSource
 import android.os.Build
@@ -104,6 +106,25 @@ fun FolderBrowserScreen(
         }
     }
 
+    // Fails loudly instead of silently when no app on the phone handles the folder picker
+    val browse: () -> Unit = {
+        val pickerExists = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+            .resolveActivity(context.packageManager) != null
+        if (!pickerExists) {
+            Toast.makeText(
+                context,
+                "No folder picker on this phone. Enable Files (or another document app) in Settings > Apps.",
+                Toast.LENGTH_LONG
+            ).show()
+        } else {
+            try {
+                folderPicker.launch(null)
+            } catch (_: ActivityNotFoundException) {
+                Toast.makeText(context, "Folder picker could not be opened.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
@@ -133,7 +154,7 @@ fun FolderBrowserScreen(
             !permissionGranted -> {
                 PermissionRequest(
                     onRequestPermission = { permissionLauncher.launch(requiredPermissions().toTypedArray()) },
-                    onBrowse = { folderPicker.launch(null) }
+                    onBrowse = browse
                 )
             }
             else -> {
@@ -150,7 +171,7 @@ fun FolderBrowserScreen(
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.weight(1f)
                         )
-                        TextButton(onClick = { folderPicker.launch(null) }) {
+                        TextButton(onClick = browse) {
                             Text("Browse")
                         }
                         TextButton(onClick = { scope.launch { viewModel.loadFolders() } }) {
