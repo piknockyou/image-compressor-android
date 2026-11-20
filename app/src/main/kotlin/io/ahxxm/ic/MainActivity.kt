@@ -1,13 +1,9 @@
 package io.ahxxm.ic
 
-import android.content.ContentResolver
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.OpenableColumns
-import android.webkit.MimeTypeMap
-import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -20,12 +16,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import io.ahxxm.ic.domain.ImageItem
+import io.ahxxm.ic.domain.imageItemFrom
 import io.ahxxm.ic.ui.AppNavigation
 import io.ahxxm.ic.ui.theme.ImageCompressorTheme
 
 class MainActivity : ComponentActivity() {
 
-    // Images received via the share sheet, waiting for the navigation to pick them up
+    // Images received via the share sheet or Open with, waiting for the navigation to pick them up
     private var incomingShared by mutableStateOf<List<ImageItem>?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,44 +55,19 @@ class MainActivity : ComponentActivity() {
         val uris = when (intent.action) {
             Intent.ACTION_SEND -> listOfNotNull(intent.streamExtra())
             Intent.ACTION_SEND_MULTIPLE -> intent.streamListExtra()
-            Intent.ACTION_VIEW -> listOfNotNull(intent.data)
+            // Open with: some apps pass several files as ClipData, so read them all
+            Intent.ACTION_VIEW -> intent.viewUris()
             else -> return null
         }
-        return uris.mapNotNull { it.toSharedImage() }.takeIf { it.isNotEmpty() }
+        return uris.mapNotNull { imageItemFrom(this, it) }.takeIf { it.isNotEmpty() }
     }
 
-    private fun Uri.toSharedImage(): ImageItem? {
-        var name = lastPathSegment?.substringAfterLast('/') ?: "image"
-        var size = 0L
-        // content:// from providers; file:// has no query support, so read the file directly
-        if (scheme == ContentResolver.SCHEME_FILE) {
-            path?.let { File(it) }?.takeIf { it.isFile }?.let { file ->
-                name = file.name
-                size = file.length()
-            }
-        } else {
-            try {
-                contentResolver.query(this, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
-                    ?.use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            name = cursor.getString(0) ?: name
-                            if (!cursor.isNull(1)) size = cursor.getLong(1)
-                        }
-                    }
-            } catch (_: Exception) {
-                // Keep the name from the URI path
-            }
+    private fun Intent.viewUris(): List<Uri> {
+        val clip = clipData
+        if (clip != null && clip.itemCount > 0) {
+            return (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
         }
-        val mime = contentResolver.getType(this)
-            ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
-            ?: return null
-        return ImageItem(
-            uri = this,
-            name = name,
-            sizeBytes = size,
-            mimeType = mime,
-            replaceInPlace = false
-        ).takeIf { it.isProcessable }
+        return listOfNotNull(data)
     }
 
     @Suppress("DEPRECATION")

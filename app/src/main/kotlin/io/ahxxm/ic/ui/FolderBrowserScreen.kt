@@ -4,7 +4,7 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.ContentResolver
 import android.content.Intent
-import android.widget.Toast
+import io.ahxxm.ic.domain.imageItemFrom
 import androidx.documentfile.provider.DocumentFile
 import io.ahxxm.ic.domain.ImageSource
 import android.os.Build
@@ -46,6 +46,10 @@ import io.ahxxm.ic.domain.FolderSummary
 import io.ahxxm.ic.domain.ImageRepository
 import io.ahxxm.ic.domain.formatBytes
 import kotlinx.coroutines.launch
+
+private fun showToast(context: android.content.Context, message: String) {
+    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+}
 
 private fun requiredPermissions(): List<String> = buildList {
     add(
@@ -106,21 +110,40 @@ fun FolderBrowserScreen(
         }
     }
 
-    // Fails loudly instead of silently when no app on the phone handles the folder picker
-    val browse: () -> Unit = {
+    // Multi-select image picker: most file managers (Mixplorer included) serve this
+    val imagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        val items = uris.mapNotNull { imageItemFrom(context, it) }
+        if (items.isNotEmpty()) onSourceSelected(ImageSource.Shared(items))
+    }
+
+    // Fails loudly instead of silently when no app on the phone handles the picker
+    val pickImages: () -> Unit = {
+        val pickerExists = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .setType("image/*")
+            .resolveActivity(context.packageManager) != null
+        if (!pickerExists) {
+            showToast(context, "No file picker on this phone. Enable Files or another file app in Settings > Apps.")
+        } else {
+            try {
+                imagePicker.launch(arrayOf("image/jpeg", "image/png"))
+            } catch (_: ActivityNotFoundException) {
+                showToast(context, "File picker could not be opened.")
+            }
+        }
+    }
+
+    val browseFolder: () -> Unit = {
         val pickerExists = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
             .resolveActivity(context.packageManager) != null
         if (!pickerExists) {
-            Toast.makeText(
-                context,
-                "No folder picker on this phone. Enable Files (or another document app) in Settings > Apps.",
-                Toast.LENGTH_LONG
-            ).show()
+            showToast(context, "No folder picker on this phone. Use Images, or enable Files in Settings > Apps.")
         } else {
             try {
                 folderPicker.launch(null)
             } catch (_: ActivityNotFoundException) {
-                Toast.makeText(context, "Folder picker could not be opened.", Toast.LENGTH_LONG).show()
+                showToast(context, "Folder picker could not be opened.")
             }
         }
     }
@@ -154,7 +177,7 @@ fun FolderBrowserScreen(
             !permissionGranted -> {
                 PermissionRequest(
                     onRequestPermission = { permissionLauncher.launch(requiredPermissions().toTypedArray()) },
-                    onBrowse = browse
+                    onBrowse = pickImages
                 )
             }
             else -> {
@@ -171,8 +194,11 @@ fun FolderBrowserScreen(
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.weight(1f)
                         )
-                        TextButton(onClick = browse) {
-                            Text("Browse")
+                        TextButton(onClick = pickImages) {
+                            Text("Images")
+                        }
+                        TextButton(onClick = browseFolder) {
+                            Text("Folder")
                         }
                         TextButton(onClick = { scope.launch { viewModel.loadFolders() } }) {
                             Text("Refresh")
@@ -213,7 +239,7 @@ private fun PermissionRequest(onRequestPermission: () -> Unit, onBrowse: () -> U
             Text("Grant Permissions")
         }
         TextButton(onClick = onBrowse, modifier = Modifier.padding(top = 8.dp)) {
-            Text("Browse folders instead")
+            Text("Pick images instead")
         }
     }
 }
