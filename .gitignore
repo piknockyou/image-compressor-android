@@ -23,3 +23,4 @@ DerivedData/
 
 # Local signing identity (see Local.xcconfig.example)
 Local.xcconfig
+app/sideload.keystore
