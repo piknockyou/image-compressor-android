@@ -19,8 +19,18 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
+      # Robolectric downloads its Android runtime from Maven during tests; a single
+      # failed download has failed builds with identical code, so retry before giving up
       - name: Run unit tests
-        run: ./gradlew testDebugUnitTest
+        run: |
+          for attempt in 1 2 3; do
+            if ./gradlew testDebugUnitTest; then
+              exit 0
+            fi
+            echo "Unit tests failed (attempt $attempt of 3), retrying in 30s"
+            sleep 30
+          done
+          exit 1
 
       - name: Build debug APK
         run: ./gradlew assembleDebug
