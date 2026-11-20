@@ -1,10 +1,13 @@
 name: Debug APK
 
+# Manual only: a build starts when you request it, never on push
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - 'claude/**'
+
+# One build at a time per branch; a newly requested build cancels the one running
+concurrency:
+  group: debug-apk-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   debug-apk:
