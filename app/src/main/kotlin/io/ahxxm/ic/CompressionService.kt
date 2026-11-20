@@ -9,6 +9,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import android.provider.MediaStore
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import io.ahxxm.ic.domain.PdfWriter
 import androidx.core.app.NotificationCompat
 import io.ahxxm.ic.domain.CompressionOptions
 import io.ahxxm.ic.domain.ImageCompressionPreview
@@ -40,6 +44,7 @@ class CompressionService : Service() {
         when (mode) {
             MODE_COMPRESS -> handleCompress()
             MODE_SAVE -> handleSave()
+            MODE_PDF -> handlePdf()
             else -> stopSelf()
         }
 
@@ -105,6 +110,59 @@ class CompressionService : Service() {
 
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
+        }
+    }
+
+    private fun handlePdf() {
+        val items = pendingSaveItems ?: run { stopSelf(); return }
+
+        startForeground(NOTIFICATION_ID, buildNotification("Creating PDF...", 0, items.size))
+
+        scope.launch {
+            val written = try {
+                writePdf(items)
+            } catch (e: Exception) {
+                false
+            }
+            items.forEach { it.tempFile?.delete() }
+
+            _saveResult.value = if (written) {
+                SaveResult(items.size, items.sumOf { it.savingsBytes })
+            } else {
+                SaveResult(0, 0L)
+            }
+            pendingSaveItems = null
+
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+    }
+
+    // One PDF per batch in Documents/ImageCompressor, pages in the order given
+    private fun writePdf(items: List<ImageCompressionPreview>): Boolean {
+        val pages = items.map { preview ->
+            val file = preview.tempFile ?: return false
+            PdfWriter.readJpegInfo(file) ?: return false
+        }
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val pending = ContentValues().apply {
+            put(MediaStore.Files.FileColumns.DISPLAY_NAME, "ImageCompressor_$stamp.pdf")
+            put(MediaStore.Files.FileColumns.MIME_TYPE, "application/pdf")
+            put(MediaStore.Files.FileColumns.RELATIVE_PATH, "Documents/ImageCompressor")
+            put(MediaStore.Files.FileColumns.IS_PENDING, 1)
+        }
+        val target = contentResolver.insert(MediaStore.Files.getContentUri("external"), pending)
+            ?: return false
+        return try {
+            val out = contentResolver.openOutputStream(target)
+                ?: throw IllegalStateException("Cannot open output for $target")
+            out.use { PdfWriter.write(pages, it) }
+            val published = ContentValues().apply { put(MediaStore.Files.FileColumns.IS_PENDING, 0) }
+            contentResolver.update(target, published, null, null)
+            true
+        } catch (e: Exception) {
+            contentResolver.delete(target, null, null)
+            false
         }
     }
 
@@ -186,6 +244,7 @@ class CompressionService : Service() {
         private const val EXTRA_MODE = "mode"
         private const val MODE_COMPRESS = "compress"
         private const val MODE_SAVE = "save"
+        private const val MODE_PDF = "pdf"
 
         var pendingImages: List<ImageItem>? = null
         var pendingOptions: CompressionOptions? = null
@@ -215,6 +274,14 @@ class CompressionService : Service() {
             _saveResult.value = null
             context.startForegroundService(
                 Intent(context, CompressionService::class.java).putExtra(EXTRA_MODE, MODE_SAVE)
+            )
+        }
+
+        fun startPdf(context: Context, items: List<ImageCompressionPreview>) {
+            pendingSaveItems = items
+            _saveResult.value = null
+            context.startForegroundService(
+                Intent(context, CompressionService::class.java).putExtra(EXTRA_MODE, MODE_PDF)
             )
         }
     }

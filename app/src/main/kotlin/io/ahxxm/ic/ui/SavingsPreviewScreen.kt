@@ -59,6 +59,7 @@ fun SavingsPreviewScreen(
     if (previews != null && errorMessage == null) {
         SavingsReviewScreen(
             previews = previews,
+            asPdf = options.asPdf,
             onConfirm = onConfirm,
             onBack = onBack,
             modifier = modifier

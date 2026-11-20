@@ -45,6 +45,7 @@ sealed class ProgressState {
 @Composable
 fun ProgressScreen(
     selectedPreviews: List<ImageCompressionPreview>,
+    asPdf: Boolean,
     onComplete: (count: Int, savedBytes: Long) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
@@ -101,7 +102,11 @@ fun ProgressScreen(
                 val mediaUris = selectedPreviews
                     .map { it.image.uri }
                     .filter { it.authority == MediaStore.AUTHORITY }
-                if (mediaUris.isEmpty()) {
+                if (asPdf) {
+                    // PDF mode writes a new file and leaves the originals alone: no approval needed
+                    state = ProgressState.Compressing
+                    CompressionService.startPdf(context, selectedPreviews)
+                } else if (mediaUris.isEmpty()) {
                     state = ProgressState.Compressing
                     CompressionService.startSave(context, selectedPreviews)
                 } else {

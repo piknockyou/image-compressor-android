@@ -148,6 +148,14 @@ fun OptionsScreen(
                     )
                     Text("Halve 20MP+", style = MaterialTheme.typography.bodyMedium)
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val asPdf by viewModel.asPdf.collectAsState()
+                    Checkbox(
+                        checked = asPdf,
+                        onCheckedChange = { viewModel.asPdf.value = it }
+                    )
+                    Text("Save as PDF", style = MaterialTheme.typography.bodyMedium)
+                }
             }
 
             Spacer(modifier = Modifier.height(GroupSpacing))

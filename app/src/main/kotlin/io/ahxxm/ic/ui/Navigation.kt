@@ -92,6 +92,7 @@ fun AppNavigation(
         composable<Progress> {
             ProgressScreen(
                 selectedPreviews = selectedPreviews,
+                asPdf = currentOptions.asPdf,
                 onComplete = { count, savedBytes ->
                     completionCount = count
                     completionSavedBytes = savedBytes

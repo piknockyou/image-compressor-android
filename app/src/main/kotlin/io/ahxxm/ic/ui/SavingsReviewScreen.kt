@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -44,9 +45,12 @@ fun SavingsReviewScreen(
     previews: List<ImageCompressionPreview>,
     onConfirm: (List<ImageCompressionPreview>) -> Unit,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    asPdf: Boolean = false
 ) {
     val listState = rememberLazyListState()
+    // Display order (user can reorder); selections stay aligned with it
+    var ordered by remember(previews) { mutableStateOf(previews) }
     var selections by remember(previews) { mutableStateOf(defaultSelections(previews)) }
     var comparisonIndex by remember(previews) { mutableStateOf<Int?>(null) }
     var confirmed by remember(previews) { mutableStateOf(false) }
@@ -68,7 +72,7 @@ fun SavingsReviewScreen(
             BackTopAppBar(title = "Review Savings", onBack = back)
         }
     ) { padding ->
-        val preview = comparisonIndex?.let { previews.getOrNull(it) }
+        val preview = comparisonIndex?.let { ordered.getOrNull(it) }
         val contentModifier = Modifier
             .fillMaxSize()
             .padding(padding)
@@ -78,19 +82,27 @@ fun SavingsReviewScreen(
             ComparisonContent(preview = preview, modifier = contentModifier)
         } else {
             ResultList(
-                previews = previews,
+                previews = ordered,
                 selections = selections,
                 listState = listState,
+                asPdf = asPdf,
                 onSelectionChange = { index, selected ->
                     selections = selections.toMutableList().apply { this[index] = selected }
                 },
-                onSelectAll = { selections = List(previews.size) { true } },
-                onDeselectAll = { selections = List(previews.size) { false } },
-                onSmartSelect = { selections = defaultSelections(previews) },
+                onMove = { index, delta ->
+                    val target = index + delta
+                    if (target in ordered.indices) {
+                        ordered = ordered.toMutableList().apply { add(target, removeAt(index)) }
+                        selections = selections.toMutableList().apply { add(target, removeAt(index)) }
+                    }
+                },
+                onSelectAll = { selections = List(ordered.size) { true } },
+                onDeselectAll = { selections = List(ordered.size) { false } },
+                onSmartSelect = { selections = defaultSelections(ordered) },
                 onOpenComparison = { comparisonIndex = it },
                 onConfirm = {
                     confirmed = true
-                    onConfirm(previews.filterIndexed { index, _ -> selections[index] })
+                    onConfirm(ordered.filterIndexed { index, _ -> selections[index] })
                 },
                 modifier = contentModifier
             )
@@ -171,7 +183,9 @@ private fun ResultList(
     previews: List<ImageCompressionPreview>,
     selections: List<Boolean>,
     listState: LazyListState,
+    asPdf: Boolean,
     onSelectionChange: (Int, Boolean) -> Unit,
+    onMove: (index: Int, delta: Int) -> Unit,
     onSelectAll: () -> Unit,
     onDeselectAll: () -> Unit,
     onSmartSelect: () -> Unit,
@@ -210,7 +224,11 @@ private fun ResultList(
                     preview = preview,
                     selected = selections[index],
                     onSelectedChange = { onSelectionChange(index, it) },
-                    onClick = { onOpenComparison(index) }
+                    onClick = { onOpenComparison(index) },
+                    canMoveUp = index > 0,
+                    canMoveDown = index < previews.lastIndex,
+                    onMoveUp = { onMove(index, -1) },
+                    onMoveDown = { onMove(index, 1) }
                 )
                 if (index < previews.lastIndex) {
                     HorizontalDivider()
@@ -221,7 +239,8 @@ private fun ResultList(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Originals will be replaced",
+            text = if (asPdf) "One PDF in Documents/ImageCompressor; originals are kept"
+                else "Originals will be replaced",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth()
@@ -234,7 +253,10 @@ private fun ResultList(
             enabled = selectedCount > 0,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Apply to $selectedCount Images")
+            Text(
+                if (asPdf) "Create PDF of $selectedCount Images"
+                else "Apply to $selectedCount Images"
+            )
         }
     }
 }
@@ -244,7 +266,11 @@ private fun PreviewRow(
     preview: ImageCompressionPreview,
     selected: Boolean,
     onSelectedChange: (Boolean) -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit
 ) {
     val sizeDelta = preview.compressedSize - preview.originalSize
     val changePct = if (preview.originalSize > 0) (sizeDelta * 100 / preview.originalSize).toInt() else 0
@@ -289,5 +315,19 @@ private fun PreviewRow(
             color = if (lowSavings) MaterialTheme.colorScheme.error
                 else MaterialTheme.colorScheme.primary
         )
+
+        // Page order: move this image up or down
+        Column {
+            TextButton(
+                onClick = onMoveUp,
+                enabled = canMoveUp,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) { Text("↑") }
+            TextButton(
+                onClick = onMoveDown,
+                enabled = canMoveDown,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) { Text("↓") }
+        }
     }
 }

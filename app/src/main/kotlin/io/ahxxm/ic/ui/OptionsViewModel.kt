@@ -48,6 +48,7 @@ class OptionsViewModel(application: Application) : AndroidViewModel(application)
     val preserveExif = MutableStateFlow(true)
     val encoder = MutableStateFlow(Encoder.JPEGLI)
     val halveOversized = MutableStateFlow(true)
+    val asPdf = MutableStateFlow(false)
 
     private val _sampleState = MutableStateFlow<SampleState>(SampleState.Loading)
     val sampleState: StateFlow<SampleState> = _sampleState
@@ -98,7 +99,8 @@ class OptionsViewModel(application: Application) : AndroidViewModel(application)
         quality = qualityLevel.value.qualityFor(encoder.value),
         preserveExif = preserveExif.value,
         encoder = encoder.value,
-        halveOversized = halveOversized.value
+        halveOversized = halveOversized.value,
+        asPdf = asPdf.value
     )
 
     private suspend fun compress(image: ImageItem) {
